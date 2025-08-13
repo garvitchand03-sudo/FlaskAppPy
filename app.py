@@ -114,83 +114,74 @@ def clear_exclude_file():
 @app.route("/exclude", methods=["POST"])
 def exclude_cluster():
     user_id = request.form.get("user_id")
+    user_name = request.form.get("user_name")
     text = request.form.get("text", "")
 
     if "reason:" not in text:
         return "Usage: /exclude-cluster <cluster-name> reason: <reason>", 200
 
-    # Run the real processing in a background thread so Slack doesn't time out
-    def process_request(user_id, text):
-        user_name = request.form.get("user_name")
-        cluster_raw, reason = text.split("reason:", 1)
-        cluster_input = cluster_raw.strip()
-        reason = reason.strip()
+    cluster_raw, reason = text.split("reason:", 1)
+    cluster_input = cluster_raw.strip()
+    reason = reason.strip()
 
-        # Validate cluster exists
-        if not cluster_exists_in_regions(cluster_input):
-            notify_requester(user_id, f":x: Cluster name {cluster_input} not found in *us-east-1* or *us-west-2*.")
-            return
+    # Validate cluster exists in AWS before proceeding
+    if not cluster_exists_in_regions(cluster_input):
+        return f":x: Cluster name {cluster_input} not found in *us-east-1* or *us-west-2*.", 200
 
-        cluster = transform_cluster_name(cluster_input)
+    # Now transform it to internal format for exclusion tracking
+    cluster = transform_cluster_name(cluster_input)
 
-        # Load current excluded clusters
-        excluded_clusters = []
-        if os.path.exists(CLUSTER_FILE):
-            with open(CLUSTER_FILE, "r") as f:
-                content = f.read().strip()
-                if content:
-                    excluded_clusters = content.split(",")
 
-        if cluster in excluded_clusters:
-            notify_requester(user_id, f"{cluster} is already excluded.")
-            return
+    # Load current excluded clusters
+    excluded_clusters = []
+    if os.path.exists(CLUSTER_FILE):
+        with open(CLUSTER_FILE, "r") as f:
+            content = f.read().strip()
+            if content:
+                excluded_clusters = content.split(",")
 
-        pending = load_pending()
-        if cluster in pending:
-            notify_requester(user_id, f"{cluster} is already pending approval.")
-            return
+    if cluster in excluded_clusters:
+        return f"{cluster} is already excluded.", 200
 
-        manager_tag = get_manager(user_id)
-        message = {
-            "channel": CHANNEL_ID,
-            "blocks": [
-                {"type": "section", "text": {"type": "mrkdwn", "text":
-                    f"*Requester:* <@{user_id}>\n*Cluster:* {cluster}\n*Reason:* {reason}\n*Manager:* {manager_tag}"}},
-                {"type": "actions", "elements": [
-                    {
-                        "type": "button",
-                        "text": {"type": "plain_text", "text": "✅ Accept"},
-                        "style": "primary",
-                        "value": cluster,
-                        "action_id": "accept_cluster"
-                    },
-                    {
-                        "type": "button",
-                        "text": {"type": "plain_text", "text": "❌ Deny"},
-                        "style": "danger",
-                        "value": cluster,
-                        "action_id": "deny_cluster"
-                    }
-                ]}
-            ]
+    pending = load_pending()
+    if cluster in pending:
+        return f"{cluster} is already pending approval.", 200
+
+    manager_tag = get_manager(user_id)
+    message = {
+        "channel": CHANNEL_ID,
+        "blocks": [
+            {"type": "section", "text": {"type": "mrkdwn", "text":
+                f"*Requester:* <@{user_id}>\n*Cluster:* {cluster}\n*Reason:* {reason}\n*Manager:* {manager_tag}"}},
+            {"type": "actions", "elements": [
+                {
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": "✅ Accept"},
+                    "style": "primary",
+                    "value": cluster,
+                    "action_id": "accept_cluster"
+                },
+                {
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": "❌ Deny"},
+                    "style": "danger",
+                    "value": cluster,
+                    "action_id": "deny_cluster"
+                }
+            ]}
+        ]
+    }
+    try:
+        response = client.chat_postMessage(**message)
+        pending[cluster] = {
+            "user_id": user_id,
+            "message_ts": response["ts"]
         }
-        try:
-            response = client.chat_postMessage(**message)
-            pending[cluster] = {
-                "user_id": user_id,
-                "message_ts": response["ts"]
-            }
-            save_pending(pending)
-            notify_requester(user_id, f":white_check_mark: Request to exclude {cluster} sent for manager approval.")
-        except SlackApiError as e:
-            print(f"[ERROR] Slack error: {e}")
-            notify_requester(user_id, "Failed to send approval request.")
-
-    # Start background task
-    threading.Thread(target=process_request, args=(user_id, text)).start()
-
-    # Respond instantly to Slack to avoid timeout
-    return "", 200
+        save_pending(pending)
+        return f":white_check_mark: Request to exclude {cluster} sent for manager approval.", 200
+    except SlackApiError as e:
+        print(f"[ERROR] Slack error: {e}")
+        return "Failed to send approval request.", 500
 
 @app.route("/slack/interactive", methods=["POST"])
 def interactive():
