@@ -9,10 +9,11 @@ from apscheduler.triggers.cron import CronTrigger
 import pytz
 import boto3
 import threading
+import os
 
 # === CONFIGURATION ===
-SLACK_BOT_TOKEN = "xoxb-3679967085-9231380700567-NigLIonbL4pjxgWSO16QTlTb"  # Replace with your bot token
-CHANNEL_ID = "C098D8D02PK"  # Replace with your channel ID (not name)
+SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN")  # Replace with your bot token
+CHANNEL_ID = os.getenv("CHANNEL_ID")  # Replace with your channel ID (not name)
 
 app = Flask(__name__)
 IST = pytz.timezone("Asia/Kolkata")
