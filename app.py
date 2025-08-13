@@ -10,8 +10,8 @@ import pytz
 import boto3
 
 # === CONFIGURATION ===
-SLACK_BOT_TOKEN = "xoxb-3679967085-9231380700567-RyviuiC6jnz3YoQZgnlRtgAo"  # Replace with your bot token
-CHANNEL_ID = "C098D8D02PK"  # Replace with your channel ID (not name)
+SLACK_BOT_TOKEN = ""  # Replace with your bot token
+CHANNEL_ID = ""  # Replace with your channel ID (not name)
 
 app = Flask(__name__)
 IST = pytz.timezone("Asia/Kolkata")
@@ -21,7 +21,7 @@ CLUSTER_FILE = "/home/bpadmin/exclude_cluster/exclude_clusters.txt"
 PENDING_FILE = "/home/bpadmin/exclude_cluster/pending_requests.json"
 
 REMOTE_USER = "bpadmin"
-REMOTE_HOST = "10.186.17.93"
+REMOTE_HOST = "10.13"
 REMOTE_PATH = "/home/bpadmin/exclude_clusters.txt"
 
 # === HELPERS ===
