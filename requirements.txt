@@ -1,0 +1,9 @@
+Flask
+gunicorn
+slack-sdk
+apscheduler
+pytz
+boto3
+paramiko
+requests
+python-dotenv
